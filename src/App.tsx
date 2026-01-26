@@ -16,31 +16,31 @@ import AdminReviews from './pages/admin/AdminReviews';
 function App() {
   return (
     <BrowserRouter>
-      
       <AuthProvider>
-
-            <div className="flex flex-col min-h-screen">
-              <Routes>
-                {/* Admin Routes */}
-                <Route path="/admin" element={<AdminLogin />} />
-                <Route
-                  path="/admin/*"
-                  element={
-                    <ProtectedRoute>
-                      <AdminLayout />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route path="dashboard" element={<AdminDashboard />} /> {/* Updated */}
-                  <Route path="products" element={<AdminProducts />} />
-                  <Route path="deals" element={<AdminDeals />} />
-                  <Route path="orders" element={<AdminOrders />} />
-                  <Route path="reviews" element={<AdminReviews />} />
-                  <Route path="*" element={<Navigate to="/admin/dashboard" replace />} />
-                </Route>
-
-              </Routes>
-            </div>
+        <div className="flex flex-col min-h-screen">
+          <Routes>
+            {/* Login is now the root or /login */}
+            <Route path="/login" element={<AdminLogin />} />
+            
+            {/* Main Admin Area */}
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <AdminLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AdminDashboard />} /> 
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="deals" element={<AdminDeals />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="reviews" element={<AdminReviews />} />
+              {/* Redirect any unknown path to dashboard */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </div>
       </AuthProvider>
     </BrowserRouter>
   );
