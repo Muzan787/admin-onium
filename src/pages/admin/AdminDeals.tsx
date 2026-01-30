@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast'; // Import toast
-import { supabase, Deal } from '../../lib/supabase';
+import { supabase, type Deal } from '../../lib/supabase';
 
 export default function AdminDeals() {
   const [deals, setDeals] = useState<Deal[]>([]);

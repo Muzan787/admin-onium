@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Edit, Trash2, Tag, Search } from 'lucide-react';
-import { supabase, Product } from '../../lib/supabase';
+import { supabase, type Product } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 
 export default function AdminProducts() {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Trash2 } from 'lucide-react';
-import { supabase, Review } from '../../lib/supabase';
+import { supabase, type Review } from '../../lib/supabase';
 
 export default function AdminReviews() {
   const [reviews, setReviews] = useState<Review[]>([]);

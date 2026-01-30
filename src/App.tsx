@@ -1,8 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-
 import { AuthProvider } from './context/AuthContext';
-
-
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/AdminLayout';
 
@@ -19,10 +16,10 @@ function App() {
       <AuthProvider>
         <div className="flex flex-col min-h-screen">
           <Routes>
-            {/* Login is now the root or /login */}
+            {/* 1. Public Login Route */}
             <Route path="/login" element={<AdminLogin />} />
             
-            {/* Main Admin Area */}
+            {/* 2. Protected Admin Routes (Root "/") */}
             <Route
               path="/"
               element={
@@ -36,7 +33,8 @@ function App() {
               <Route path="deals" element={<AdminDeals />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="reviews" element={<AdminReviews />} />
-              {/* Redirect any unknown path to dashboard */}
+              
+              {/* Catch-all: Redirect unknown pages to Dashboard */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
