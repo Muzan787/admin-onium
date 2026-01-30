@@ -7,9 +7,9 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/login'); // Fixed: Go to /login, not /admin
+const handleSignOut = () => { // Removed 'async'
+    signOut(); // No 'await' needed anymore
+    navigate('/login');
   };
 
   // Helper to check if a link is active

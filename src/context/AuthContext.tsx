@@ -1,53 +1,70 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
-import type { User, Session } from '@supabase/supabase-js';
+
+// Define our own simple Admin User type (not the Supabase Auth User)
+interface AdminUser {
+  id: string;
+  email: string;
+}
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AdminUser | null;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signOut: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Check for existing session on load
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (async () => {
-        setSession(session);
-        setUser(session?.user ?? null);
-      })();
-    });
-
-    return () => subscription.unsubscribe();
+    const storedUser = localStorage.getItem('onium_admin_user');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('onium_admin_user');
+      }
+    }
+    setIsLoading(false);
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      // Manual Query to the 'admins' table
+      const { data, error } = await supabase
+        .from('admins')
+        .select('id, email')
+        .eq('email', email)
+        .eq('password', password) // Checking against the hardcoded password
+        .single();
+
+      if (error || !data) {
+        return { error: 'Invalid admin credentials' };
+      }
+
+      // Success: Save to state and local storage
+      const adminUser = { id: data.id, email: data.email };
+      setUser(adminUser);
+      localStorage.setItem('onium_admin_user', JSON.stringify(adminUser));
+      
+      return { error: null };
+    } catch (err) {
+      return { error: 'Login failed' };
+    }
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
+  const signOut = () => {
+    setUser(null);
+    localStorage.removeItem('onium_admin_user');
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

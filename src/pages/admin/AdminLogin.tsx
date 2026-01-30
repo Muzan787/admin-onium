@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext'; //
 import toast from 'react-hot-toast';
 
 export default function AdminLogin() {
@@ -15,13 +15,14 @@ export default function AdminLogin() {
     e.preventDefault();
     setIsLoading(true);
 
+    // Call our new custom signIn
     const { error } = await signIn(email, password);
 
     if (error) {
-      toast.error('Invalid credentials');
+      toast.error(error); // Display the custom error message
     } else {
-      toast.success('Welcome back');
-      navigate('/'); // Fixed: Go to Dashboard Root
+      toast.success('Welcome back, Admin');
+      navigate('/');
     }
 
     setIsLoading(false);
@@ -37,9 +38,9 @@ export default function AdminLogin() {
         </div>
 
         <h1 className="text-2xl font-bold text-center text-gray-900 mb-2">
-          Admin Access
+          Admin Portal
         </h1>
-        <p className="text-center text-gray-500 mb-8">Sign in to manage Onium Store</p>
+        <p className="text-center text-gray-500 mb-8">Restricted Access Only</p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
@@ -75,7 +76,7 @@ export default function AdminLogin() {
             disabled={isLoading}
             className="w-full bg-slate-900 text-white px-6 py-3.5 rounded-xl hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-bold shadow-lg shadow-slate-900/20 active:scale-[0.98]"
           >
-            {isLoading ? 'Verifying...' : 'Access Dashboard'}
+            {isLoading ? 'Verifying Credentials...' : 'Access Dashboard'}
           </button>
         </form>
       </div>
