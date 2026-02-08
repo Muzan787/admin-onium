@@ -1,21 +1,26 @@
-// src/pages/admin/AdminDashboard.tsx
 import { useEffect, useState } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
-  DollarSign, ShoppingBag, Package, Clock, 
-  CheckCircle, Truck, XCircle, ArrowRight, Calendar 
+  DollarSign, ShoppingBag, AlertTriangle, 
+  ArrowRight, Calendar, Star, Package 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { format } from 'date-fns';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
     totalRevenue: 0,
     totalOrders: 0,
-    pendingOrders: 0,
-    productsCount: 0,
+    pendingReviews: 0,
+    lowStockCount: 0,
   });
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Threshold for "Low Stock" warning
+  const LOW_STOCK_THRESHOLD = 5;
 
   useEffect(() => {
     fetchDashboardData();
@@ -28,30 +33,63 @@ export default function AdminDashboard() {
         .from('orders')
         .select('*')
         .order('created_at', { ascending: true });
-
       if (ordersError) throw ordersError;
 
-      // 2. Fetch Product Count
-      const { count, error: productsError } = await supabase
+      // 2. Fetch All Products (for Stock & Top Selling calc)
+      const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('*', { count: 'exact', head: true });
-
+        .select('*');
       if (productsError) throw productsError;
 
-      // --- Process Stats ---
-      const totalRevenue = orders?.reduce((sum, order) => sum + (order.total_price || 0), 0) || 0;
-      const totalOrders = orders?.length || 0;
-      const pendingOrders = orders?.filter(o => o.status === 'pending').length || 0;
+      // 3. Fetch Order Items (to calculate sales)
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('product_title, quantity, price_at_purchase');
+      if (itemsError) throw itemsError;
+
+      // 4. Fetch Pending Reviews Count
+      const { count: reviewCount, error: reviewError } = await supabase
+        .from('reviews')
+        .select('*', { count: 'exact', head: true })
+        .eq('is_approved', false);
+      if (reviewError) throw reviewError;
+
+      // --- Process Data ---
+      
+      // A. Basic Stats
+      const totalRevenue = (orders || []).reduce((sum, order) => sum + (order.total_price || 0), 0);
+      const totalOrders = (orders || []).length;
+      
+      // B. Low Stock Items
+      const lowStock = (products || [])
+        .filter(p => p.stock <= LOW_STOCK_THRESHOLD)
+        .sort((a, b) => a.stock - b.stock) // Lowest stock first
+        .slice(0, 5); // Show top 5
+
+      // C. Top Selling Products
+      const productSales: Record<string, any> = {};
+      (orderItems || []).forEach(item => {
+        if (!productSales[item.product_title]) {
+          productSales[item.product_title] = { name: item.product_title, sales: 0, revenue: 0 };
+        }
+        productSales[item.product_title].sales += item.quantity;
+        productSales[item.product_title].revenue += item.quantity * item.price_at_purchase;
+      });
+
+      const topProductsList = Object.values(productSales)
+        .sort((a: any, b: any) => b.sales - a.sales)
+        .slice(0, 5);
 
       setStats({
         totalRevenue,
         totalOrders,
-        pendingOrders,
-        productsCount: count || 0,
+        pendingReviews: reviewCount || 0,
+        lowStockCount: (products || []).filter(p => p.stock <= LOW_STOCK_THRESHOLD).length,
       });
 
-      // Show last 5 orders for the list
       setRecentOrders([...(orders || [])].reverse().slice(0, 5));
+      setLowStockItems(lowStock);
+      setTopProducts(topProductsList);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -60,123 +98,198 @@ export default function AdminDashboard() {
     }
   };
 
-  const StatCard = ({ title, value, icon: Icon, color, subtext }: any) => (
-    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-      <div>
-        <p className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">{title}</p>
-        <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
-        {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+  const StatCard = ({ title, value, icon: Icon, color, link, linkText }: any) => (
+    <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all">
+      <div className="flex items-center justify-between mb-4">
+        <div className={`p-3 rounded-xl ${color} bg-opacity-10`}>
+          <Icon className={`w-6 h-6 ${color.replace('bg-', 'text-')}`} />
+        </div>
+        <span className="text-2xl font-bold text-slate-900">{value}</span>
       </div>
-      <div className={`p-4 rounded-xl ${color}`}>
-        <Icon className="w-6 h-6 text-white" />
+      <div>
+        <p className="text-sm font-medium text-slate-500">{title}</p>
+        {link && (
+          <Link to={link} className="text-xs font-bold text-slate-900 mt-2 inline-flex items-center gap-1 hover:underline">
+            {linkText} <ArrowRight className="w-3 h-3" />
+          </Link>
+        )}
       </div>
     </div>
   );
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered': return 'bg-green-100 text-green-700';
-      case 'shipped': return 'bg-blue-100 text-blue-700';
-      case 'cancelled': return 'bg-red-100 text-red-700';
-      default: return 'bg-amber-100 text-amber-700';
-    }
-  };
-
-  if (loading) return <div className="p-8 text-center text-slate-500">Loading dashboard...</div>;
+  if (loading) return (
+    <div className="flex justify-center items-center h-96">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-slate-900" />
+    </div>
+  );
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-end">
+    <div className="space-y-8 animate-fade-in pb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-slate-500">Overview of your store's performance.</p>
+          <h1 className="text-3xl font-bold text-slate-900">Overview</h1>
+          <p className="text-slate-500">Here is what's happening with your store today.</p>
         </div>
-        <div className="text-sm font-medium text-slate-400 flex items-center gap-2">
-          <Calendar className="w-4 h-4" /> Today: {new Date().toLocaleDateString()}
+        <div className="text-sm font-bold text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm flex items-center gap-2">
+          <Calendar className="w-4 h-4" /> 
+          {format(new Date(), 'dd MMM, yyyy')}
         </div>
       </div>
 
-      {/* Stats Grid */}
+      {/* 1. Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Revenue" value={`Rs${stats.totalRevenue.toLocaleString()}`} icon={DollarSign} color="bg-primary-500" />
-        <StatCard title="Total Orders" value={stats.totalOrders} icon={ShoppingBag} color="bg-secondary-500" />
-        <StatCard title="Pending Orders" value={stats.pendingOrders} icon={Clock} color="bg-accent-500" subtext="Requires attention" />
-        <StatCard title="Total Products" value={stats.productsCount} icon={Package} color="bg-slate-500" />
+        <StatCard 
+          title="Total Revenue" 
+          value={`Rs${stats.totalRevenue.toLocaleString()}`} 
+          icon={DollarSign} 
+          color="bg-emerald-500" 
+        />
+        <StatCard 
+          title="Total Orders" 
+          value={stats.totalOrders} 
+          icon={ShoppingBag} 
+          color="bg-blue-500" 
+          link="/orders"
+          linkText="View Orders"
+        />
+        <StatCard 
+          title="Pending Reviews" 
+          value={stats.pendingReviews} 
+          icon={Star} 
+          color="bg-amber-500" 
+          link="/reviews"
+          linkText="Approve Reviews"
+        />
+        <StatCard 
+          title="Low Stock Items" 
+          value={stats.lowStockCount} 
+          icon={AlertTriangle} 
+          color="bg-red-500" 
+          link="/products"
+          linkText="Update Stock"
+        />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Recent Orders List */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-lg font-bold text-slate-900">Recent Orders</h2>
-            <Link to="/admin/orders" className="text-primary-600 text-sm font-bold hover:underline flex items-center gap-1">
-              View All <ArrowRight className="w-4 h-4" />
-            </Link>
+      <div className="grid lg:grid-cols-2 gap-8">
+        
+        {/* 2. Low Stock Alerts (Actionable) */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-red-50/30">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              Low Stock Alerts
+            </h2>
+            <Link to="/products" className="text-xs font-bold text-red-600 hover:text-red-700">Manage Stock</Link>
           </div>
-          <div className="divide-y divide-slate-100">
-            {recentOrders.map((order) => (
-              <div key={order.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+          <div className="flex-1">
+            {lowStockItems.length > 0 ? (
+              <div className="divide-y divide-slate-50">
+                {lowStockItems.map((item) => (
+                  <div key={item.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden border border-slate-200">
+                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm">{item.title}</p>
+                        <p className="text-xs text-slate-500">Price: Rs{item.price}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        {item.stock} remaining
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-slate-400 text-sm">
+                <Package className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                All stock levels look good!
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 3. Top Performing Products (Insight) */}
+        <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-50 bg-emerald-50/30">
+            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <DollarSign className="w-5 h-5 text-emerald-500" />
+              Best Sellers
+            </h2>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {topProducts.map((product, index) => (
+              <div key={index} className="p-4 flex items-center justify-between hover:bg-slate-50 transition">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
-                    {order.customer_name.charAt(0)}
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900">{order.customer_name}</p>
-                    <p className="text-xs text-slate-500 font-mono">#{order.id.slice(0, 8)}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-slate-900">Rs{order.total_price}</p>
-                  <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase ${getStatusColor(order.status)}`}>
-                    {order.status}
+                  <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
+                    ${index === 0 ? 'bg-yellow-100 text-yellow-700' : 'bg-slate-100 text-slate-600'}
+                  `}>
+                    #{index + 1}
                   </span>
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">{product.name}</p>
+                    <p className="text-xs text-slate-500">{product.sales} units sold</p>
+                  </div>
                 </div>
+                <p className="font-bold text-slate-900 text-sm">Rs{product.revenue.toLocaleString()}</p>
               </div>
             ))}
-            {recentOrders.length === 0 && <div className="p-8 text-center text-slate-500">No orders yet.</div>}
+            {topProducts.length === 0 && (
+              <div className="p-8 text-center text-slate-400 text-sm">No sales data recorded yet.</div>
+            )}
           </div>
         </div>
 
-        {/* Quick Stats Column */}
-        <div className="space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-            <h2 className="text-lg font-bold text-slate-900 mb-4">Order Status</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-100">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="text-sm font-medium text-green-900">Delivered</span>
-                </div>
-                <span className="font-bold text-green-700">{recentOrders.filter(o => o.status === 'delivered').length}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl border border-blue-100">
-                <div className="flex items-center gap-3">
-                  <Truck className="w-5 h-5 text-blue-600" />
-                  <span className="text-sm font-medium text-blue-900">Shipped</span>
-                </div>
-                <span className="font-bold text-blue-700">{recentOrders.filter(o => o.status === 'shipped').length}</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-red-50 rounded-xl border border-red-100">
-                <div className="flex items-center gap-3">
-                  <XCircle className="w-5 h-5 text-red-600" />
-                  <span className="text-sm font-medium text-red-900">Cancelled</span>
-                </div>
-                <span className="font-bold text-red-700">{recentOrders.filter(o => o.status === 'cancelled').length}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl shadow-lg p-6 text-white relative overflow-hidden">
-            <div className="relative z-10">
-              <h3 className="font-bold text-lg mb-2">Pro Tip</h3>
-              <p className="text-slate-300 text-sm mb-4 leading-relaxed">
-                Regularly update order statuses to keep your customers happy. They can track these updates live!
-              </p>
-              <Link to="/admin/orders" className="block w-full py-2.5 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-center font-bold text-sm transition-colors">
-                Manage Orders
-              </Link>
-            </div>
-          </div>
+      </div>
+
+      {/* 4. Recent Orders Table */}
+      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-900">Latest Transactions</h2>
+          <Link to="/orders" className="text-slate-600 text-sm font-bold hover:text-slate-900 flex items-center gap-1">
+            View All Orders <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50/50 text-slate-500 font-medium">
+              <tr>
+                <th className="px-6 py-3">Order ID</th>
+                <th className="px-6 py-3">Customer</th>
+                <th className="px-6 py-3">Date</th>
+                <th className="px-6 py-3">Amount</th>
+                <th className="px-6 py-3 text-right">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {recentOrders.map((order) => (
+                <tr key={order.id} className="hover:bg-slate-50 transition">
+                  <td className="px-6 py-4 font-mono text-slate-500">#{order.id.slice(0, 8).toUpperCase()}</td>
+                  <td className="px-6 py-4 font-medium text-slate-900">{order.customer_name}</td>
+                  <td className="px-6 py-4 text-slate-500">{new Date(order.created_at).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 font-bold text-slate-900">Rs{order.total_price.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-right">
+                    <span className={`inline-flex px-2 py-1 rounded-full text-xs font-bold uppercase tracking-wide
+                      ${order.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' : 
+                        order.status === 'pending' ? 'bg-amber-100 text-amber-700' : 
+                        order.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}
+                    `}>
+                      {order.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {recentOrders.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-slate-400">No orders found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

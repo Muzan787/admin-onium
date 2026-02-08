@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Tag, Search, Upload, X, Save } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Upload, X, Save } from 'lucide-react';
 import { supabase, type Product } from '../../lib/supabase';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import ReactQuill from 'react-quill-new';
-import 'react-quill-new/dist/quill.snow.css'; // Import Quill styles
+import 'react-quill-new/dist/quill.snow.css';
 
 // --- Configuration ---
-//ZGPc Replace these with your actual Cloudinary details
-const CLOUDINARY_UPLOAD_PRESET = 'YOUR_UZ_PRESET_NAME'; 
-const CLOUDINARY_CLOUD_NAME = 'YOUR_CLOUD_NAME';
+// REPLACE THESE WITH YOUR ACTUAL CLOUDINARY KEYS
+const CLOUDINARY_UPLOAD_PRESET = 'OniumProducts'; 
+const CLOUDINARY_CLOUD_NAME = 'dztldh7o2';
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,10 +19,9 @@ export default function AdminProducts() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // --- Form State ---
   const [formData, setFormData] = useState({
     title: '',
-    description: '', // This will now hold HTML from ReactQuill
+    description: '',
     price: '',
     discount: '0',
     category: '',
@@ -30,7 +29,6 @@ export default function AdminProducts() {
     stock: '',
   });
 
-  // Dynamic Specifications State: Array of { key, value }
   const [specs, setSpecs] = useState<{ key: string; value: string }[]>([]);
 
   useEffect(() => {
@@ -54,7 +52,6 @@ export default function AdminProducts() {
     }
   };
 
-  // --- Cloudinary Image Upload ---
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -69,9 +66,7 @@ export default function AdminProducts() {
         `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
         uploadData
       );
-      
-      const secureUrl = response.data.secure_url;
-      setFormData({ ...formData, image_url: secureUrl });
+      setFormData({ ...formData, image_url: response.data.secure_url });
       toast.success('Image uploaded successfully!');
     } catch (error) {
       console.error('Upload error:', error);
@@ -81,28 +76,28 @@ export default function AdminProducts() {
     }
   };
 
-  // --- Specification Builder Logic ---
-  const addSpecRow = () => {
-    setSpecs([...specs, { key: '', value: '' }]);
-  };
-
-  const removeSpecRow = (index: number) => {
-    const newSpecs = specs.filter((_, i) => i !== index);
-    setSpecs(newSpecs);
-  };
-
+  const addSpecRow = () => setSpecs([...specs, { key: '', value: '' }]);
+  const removeSpecRow = (index: number) => setSpecs(specs.filter((_, i) => i !== index));
   const updateSpec = (index: number, field: 'key' | 'value', newValue: string) => {
     const newSpecs = [...specs];
     newSpecs[index][field] = newValue;
     setSpecs(newSpecs);
   };
 
-  // --- Form Submission ---
+  // --- NEW: SLUG GENERATOR ---
+  const generateSlug = (title: string) => {
+    return title
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s-]/g, '') // Remove special chars
+      .replace(/[\s_-]+/g, '-') // Replace spaces with dashes
+      .replace(/^-+|-+$/g, ''); // Trim dashes
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     try {
-      // Convert Specs Array back to Object: { "Color": "Red", "Size": "M" }
       const specificationsObject = specs.reduce((acc, curr) => {
         if (curr.key.trim() && curr.value.trim()) {
           acc[curr.key.trim()] = curr.value.trim();
@@ -110,7 +105,8 @@ export default function AdminProducts() {
         return acc;
       }, {} as Record<string, any>);
 
-      const productData = {
+      // Base payload
+      const productData: any = {
         title: formData.title,
         description: formData.description,
         price: parseFloat(formData.price),
@@ -122,13 +118,21 @@ export default function AdminProducts() {
       };
 
       if (editingProduct) {
-        const {error } = await supabase
+        // Update existing
+        const { error } = await supabase
           .from('products')
           .update(productData)
           .eq('id', editingProduct.id);
         if (error) throw error;
         toast.success('Product updated');
       } else {
+        // Create new - MUST GENERATE SLUG
+        // We append a timestamp to ensure uniqueness
+        const baseSlug = generateSlug(formData.title);
+        const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`;
+        
+        productData.slug = uniqueSlug;
+
         const { error } = await supabase.from('products').insert(productData);
         if (error) throw error;
         toast.success('Product created');
@@ -138,11 +142,10 @@ export default function AdminProducts() {
       fetchProducts();
     } catch (error) {
       console.error('Error saving product:', error);
-      toast.error('Failed to save product');
+      toast.error('Failed to save product. ensure fields are valid.');
     }
   };
 
-  // --- Edit Mode Setup ---
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
     setFormData({
@@ -155,7 +158,6 @@ export default function AdminProducts() {
       stock: product.stock.toString(),
     });
 
-    // Convert Object to Specs Array
     if (product.specifications) {
       const specsArray = Object.entries(product.specifications).map(([key, value]) => ({
         key,
@@ -165,7 +167,6 @@ export default function AdminProducts() {
     } else {
       setSpecs([]);
     }
-    
     setShowModal(true);
   };
 
@@ -200,10 +201,8 @@ export default function AdminProducts() {
     p.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // --- Render ---
   return (
     <div>
-      {/* Top Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Products</h2>
@@ -306,7 +305,7 @@ export default function AdminProducts() {
                     </div>
                   </div>
 
-                  {/* Image Upload Section */}
+                  {/* Image Upload */}
                   <div className="space-y-4">
                     <label className="block text-sm font-bold text-slate-700">Product Image</label>
                     <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-50 text-center hover:bg-slate-100 transition relative">
@@ -333,11 +332,9 @@ export default function AdminProducts() {
                             onChange={handleImageUpload} 
                             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                           />
-                          <p className="text-xs text-slate-400">Supported: JPG, PNG, WEBP</p>
                         </>
                       )}
                     </div>
-                    {/* Fallback URL input if upload fails */}
                     <input 
                       type="text" 
                       placeholder="Or paste image URL..." 
@@ -356,12 +353,12 @@ export default function AdminProducts() {
                       theme="snow" 
                       value={formData.description} 
                       onChange={(value: any) => setFormData({ ...formData, description: value })} 
-                      className="h-40 mb-12" // Margin bottom handles Quill toolbar height
+                      className="h-40 mb-12"
                     />
                   </div>
                 </div>
 
-                {/* Specifications Builder */}
+                {/* Specs */}
                 <div className="pt-4 border-t border-slate-100">
                   <div className="flex justify-between items-center mb-3">
                     <label className="block text-sm font-bold text-slate-700">Specifications</label>
@@ -369,40 +366,21 @@ export default function AdminProducts() {
                       <Plus size={14} /> Add Spec
                     </button>
                   </div>
-                  
                   <div className="space-y-2 bg-slate-50 p-4 rounded-xl">
-                    {specs.length === 0 && <p className="text-sm text-slate-400 italic text-center">No specifications added yet.</p>}
-                    
                     {specs.map((spec, index) => (
                       <div key={index} className="flex gap-2">
-                        <input 
-                          placeholder="Key (e.g. Color)" 
-                          value={spec.key} 
-                          onChange={(e) => updateSpec(index, 'key', e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none"
-                        />
-                        <input 
-                          placeholder="Value (e.g. Red)" 
-                          value={spec.value} 
-                          onChange={(e) => updateSpec(index, 'value', e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none"
-                        />
-                        <button type="button" onClick={() => removeSpecRow(index)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg">
-                          <Trash2 size={16} />
-                        </button>
+                        <input placeholder="Key (e.g. Color)" value={spec.key} onChange={(e) => updateSpec(index, 'key', e.target.value)} className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none" />
+                        <input placeholder="Value (e.g. Red)" value={spec.value} onChange={(e) => updateSpec(index, 'value', e.target.value)} className="flex-1 px-3 py-2 text-sm border rounded-lg outline-none" />
+                        <button type="button" onClick={() => removeSpecRow(index)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 size={16} /></button>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* Footer Buttons */}
+                {/* Buttons */}
                 <div className="flex gap-3 justify-end pt-4 border-t border-slate-100">
-                  <button type="button" onClick={handleCloseModal} className="px-6 py-2.5 border border-slate-300 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition">
-                    Cancel
-                  </button>
-                  <button type="submit" className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg flex items-center gap-2">
-                    <Save size={18} /> {editingProduct ? 'Update Product' : 'Create Product'}
-                  </button>
+                  <button type="button" onClick={handleCloseModal} className="px-6 py-2.5 border border-slate-300 rounded-xl font-bold text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                  <button type="submit" className="px-6 py-2.5 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition shadow-lg flex items-center gap-2"><Save size={18} /> {editingProduct ? 'Update Product' : 'Create Product'}</button>
                 </div>
               </form>
             </div>
