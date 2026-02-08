@@ -9,6 +9,7 @@ import AdminProducts from './pages/admin/AdminProducts';
 import AdminDeals from './pages/admin/AdminDeals';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminReviews from './pages/admin/AdminReviews';
+import AdminCustomers from './pages/admin/AdminCustomers';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
               <Route path="deals" element={<AdminDeals />} />
               <Route path="orders" element={<AdminOrders />} />
               <Route path="reviews" element={<AdminReviews />} />
+              <Route path="customers" element={<AdminCustomers />} />
               
               {/* Catch-all: Redirect unknown pages to Dashboard */}
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,5 +1,5 @@
 import { Link, useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Package, Image, ShoppingBag, LogOut, Star, LayoutDashboard } from 'lucide-react';
+import { Package, Image, ShoppingBag, LogOut, Star, LayoutDashboard, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function AdminLayout() {
@@ -69,6 +69,11 @@ const handleSignOut = () => { // Removed 'async'
             <Link to="/orders" className={linkClass('/orders')}>
               <ShoppingBag className="w-5 h-5" />
               Orders
+            </Link>
+
+            <Link to="/customers" className={linkClass('/customers')}>
+              <Users className="w-5 h-5" />
+              Customers
             </Link>
 
             <Link to="/reviews" className={linkClass('/reviews')}>

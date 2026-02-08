@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Order, type OrderItem } from '../../lib/supabase';
 import { 
-  CreditCard, Banknote, Truck, AlertCircle, Printer, X, 
+  CreditCard, Truck, Printer, X, 
   Search, Filter, ChevronLeft, ChevronRight, CheckSquare, Square 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
