@@ -124,7 +124,7 @@ export default function AdminDashboard() {
   );
 
   return (
-    <div className="space-y-8 animate-fade-in pb-10">
+    <div className="space-y-6 md:space-y-8 animate-fade-in pb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
         <div>
