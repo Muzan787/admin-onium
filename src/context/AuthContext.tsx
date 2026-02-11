@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       // 1. Authenticate with Supabase Auth (Secure)
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -55,7 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (authError) {
         return { error: authError.message };
       }
-
+      
       // 2. (Optional) Double-check against your 'admins' table
       // This ensures that even if someone signs up via Supabase Auth, 
       // they must also be in your 'admins' whitelist to get access.
