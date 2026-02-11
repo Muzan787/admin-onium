@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 
-// Define our own simple Admin User type (not the Supabase Auth User)
+// Define our own simple Admin User type
 interface AdminUser {
   id: string;
   email: string;
@@ -20,47 +20,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing session on load
   useEffect(() => {
-    const storedUser = localStorage.getItem('onium_admin_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        localStorage.removeItem('onium_admin_user');
+    // 1. Check for an active session on initial load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email || '' });
       }
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    });
+
+    // 2. Listen for auth changes (sign in, sign out, token refresh)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({ id: session.user.id, email: session.user.email || '' });
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Manual Query to the 'admins' table
-      const { data, error } = await supabase
+      // 1. Authenticate with Supabase Auth (Secure)
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        return { error: authError.message };
+      }
+
+      // 2. (Optional) Double-check against your 'admins' table
+      // This ensures that even if someone signs up via Supabase Auth, 
+      // they must also be in your 'admins' whitelist to get access.
+      const { data: adminData, error: adminError } = await supabase
         .from('admins')
         .select('id, email')
         .eq('email', email)
-        .eq('password', password) // Checking against the hardcoded password
         .single();
 
-      if (error || !data) {
-        return { error: 'Invalid admin credentials' };
+      if (adminError || !adminData) {
+        // User logged in but not authorized as admin -> Log them out immediately
+        await supabase.auth.signOut();
+        return { error: 'Not an authorized admin' };
       }
 
-      // Success: Save to state and local storage
-      const adminUser = { id: data.id, email: data.email };
-      setUser(adminUser);
-      localStorage.setItem('onium_admin_user', JSON.stringify(adminUser));
-      
+      // Success: The onAuthStateChange listener above will update the state
       return { error: null };
     } catch (err) {
+      console.error('Sign in error:',err);
       return { error: 'Login failed' };
     }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('onium_admin_user');
   };
 
   return (
